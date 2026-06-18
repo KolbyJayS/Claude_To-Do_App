@@ -16,28 +16,40 @@ def cache_get(key):
     r = get_redis()
     if r is None:
         return None
-    val = r.get(key)
-    return json.loads(val) if val else None
+    try:
+        val = r.get(key)
+        return json.loads(val) if val else None
+    except Exception:
+        return None
 
 
 def cache_set(key, value, ttl=300):
     r = get_redis()
     if r is None:
         return
-    r.setex(key, ttl, json.dumps(value, default=str))
+    try:
+        r.setex(key, ttl, json.dumps(value, default=str))
+    except Exception:
+        pass
 
 
 def cache_delete(key):
     r = get_redis()
     if r is None:
         return
-    r.delete(key)
+    try:
+        r.delete(key)
+    except Exception:
+        pass
 
 
 def cache_delete_pattern(pattern):
     r = get_redis()
     if r is None:
         return
-    keys = r.keys(pattern)
-    if keys:
-        r.delete(*keys)
+    try:
+        keys = r.keys(pattern)
+        if keys:
+            r.delete(*keys)
+    except Exception:
+        pass
