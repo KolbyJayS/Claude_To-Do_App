@@ -22,7 +22,7 @@ def list_todos():
 
     rows = db.fetchall(
         "SELECT id, title, completed, created_at::text FROM todos "
-        "WHERE user_id = $1 ORDER BY created_at DESC",
+        "WHERE user_id = %s ORDER BY created_at DESC",
         (g.user_id,),
     )
     todos = [dict(r) for r in rows]
@@ -39,7 +39,7 @@ def create_todo():
         return jsonify({"error": "Title required"}), 400
 
     row = db.execute(
-        "INSERT INTO todos (user_id, title) VALUES ($1, $2) "
+        "INSERT INTO todos (user_id, title) VALUES (%s, %s) "
         "RETURNING id, title, completed, created_at::text",
         (g.user_id, title),
     )
@@ -53,17 +53,17 @@ def update_todo(todo_id):
     data = request.get_json() or {}
 
     existing = db.fetchone(
-        "SELECT id FROM todos WHERE id = $1 AND user_id = $2", (todo_id, g.user_id)
+        "SELECT id FROM todos WHERE id = %s AND user_id = %s", (todo_id, g.user_id)
     )
     if not existing:
         return jsonify({"error": "Not found"}), 404
 
     updates, params = [], []
     if "title" in data:
-        updates.append(f"title = ${len(params) + 1}")
+        updates.append("title = %s")
         params.append(data["title"].strip())
     if "completed" in data:
-        updates.append(f"completed = ${len(params) + 1}")
+        updates.append("completed = %s")
         params.append(bool(data["completed"]))
 
     if not updates:
@@ -72,7 +72,7 @@ def update_todo(todo_id):
     params.extend([todo_id, g.user_id])
     row = db.execute(
         f"UPDATE todos SET {', '.join(updates)}, updated_at = NOW() "
-        f"WHERE id = ${len(params) - 1} AND user_id = ${len(params)} "
+        "WHERE id = %s AND user_id = %s "
         "RETURNING id, title, completed, created_at::text",
         params,
     )
@@ -84,7 +84,7 @@ def update_todo(todo_id):
 @require_auth
 def delete_todo(todo_id):
     row = db.execute(
-        "DELETE FROM todos WHERE id = $1 AND user_id = $2 RETURNING id",
+        "DELETE FROM todos WHERE id = %s AND user_id = %s RETURNING id",
         (todo_id, g.user_id),
     )
     if not row:

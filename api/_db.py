@@ -1,69 +1,34 @@
-import pg8000.native
+import psycopg
+from psycopg.rows import dict_row
 from contextlib import contextmanager
 from _config import DATABASE_URL
-from urllib.parse import urlparse
-
-_parsed = None
 
 
-def _get_conn_kwargs():
-    global _parsed
-    if _parsed is None:
-        p = urlparse(DATABASE_URL)
-        _parsed = {
-            "host": p.hostname,
-            "port": p.port or 5432,
-            "database": p.path.lstrip("/"),
-            "user": p.username,
-            "password": p.password,
-            "ssl_context": True,
-        }
-    return _parsed
-
-
-def _connect():
-    kwargs = _get_conn_kwargs()
-    return pg8000.native.Connection(**kwargs)
+@contextmanager
+def get_db():
+    with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+        yield conn
 
 
 def fetchone(sql, params=None):
-    conn = _connect()
-    try:
-        if params:
-            rows = conn.run(sql, *params)
-        else:
-            rows = conn.run(sql)
-        cols = [c["name"] for c in conn.columns]
-        if not rows:
-            return None
-        return dict(zip(cols, rows[0]))
-    finally:
-        conn.close()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()
 
 
 def fetchall(sql, params=None):
-    conn = _connect()
-    try:
-        if params:
-            rows = conn.run(sql, *params)
-        else:
-            rows = conn.run(sql)
-        cols = [c["name"] for c in conn.columns]
-        return [dict(zip(cols, row)) for row in rows]
-    finally:
-        conn.close()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
 
 
 def execute(sql, params=None):
-    conn = _connect()
-    try:
-        if params:
-            rows = conn.run(sql, *params)
-        else:
-            rows = conn.run(sql)
-        cols = [c["name"] for c in conn.columns] if conn.columns else []
-        if not rows or not cols:
-            return None
-        return dict(zip(cols, rows[0]))
-    finally:
-        conn.close()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            try:
+                return cur.fetchone()
+            except Exception:
+                return None

@@ -22,12 +22,12 @@ def register():
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
 
-    existing = db.fetchone("SELECT id FROM users WHERE email = $1", (email,))
+    existing = db.fetchone("SELECT id FROM users WHERE email = %s", (email,))
     if existing:
         return jsonify({"error": "Email already registered"}), 409
 
     user = db.execute(
-        "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
+        "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id, email",
         (email, hash_password(password)),
     )
 
@@ -52,7 +52,7 @@ def login():
     password = data.get("password") or ""
 
     user = db.fetchone(
-        "SELECT id, email, password_hash FROM users WHERE email = $1", (email,)
+        "SELECT id, email, password_hash FROM users WHERE email = %s", (email,)
     )
     if not user or not check_password(password, user["password_hash"]):
         return jsonify({"error": "Invalid credentials"}), 401
@@ -82,7 +82,7 @@ def refresh():
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid refresh token"}), 401
 
-    user = db.fetchone("SELECT id, email FROM users WHERE id = $1", (payload["sub"],))
+    user = db.fetchone("SELECT id, email FROM users WHERE id = %s", (payload["sub"],))
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -101,6 +101,6 @@ def logout():
 @require_auth
 def me():
     user = db.fetchone(
-        "SELECT id, email, created_at FROM users WHERE id = $1", (g.user_id,)
+        "SELECT id, email, created_at FROM users WHERE id = %s", (g.user_id,)
     )
     return jsonify({"user": dict(user)})
