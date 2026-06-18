@@ -1,52 +1,69 @@
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
+import pg8000.native
 from contextlib import contextmanager
 from _config import DATABASE_URL
+from urllib.parse import urlparse
 
-_pool = None
-
-
-def _get_pool():
-    global _pool
-    if _pool is None:
-        _pool = psycopg2.pool.SimpleConnectionPool(1, 5, DATABASE_URL)
-    return _pool
+_parsed = None
 
 
-@contextmanager
-def get_db():
-    conn = _get_pool().getconn()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        _get_pool().putconn(conn)
+def _get_conn_kwargs():
+    global _parsed
+    if _parsed is None:
+        p = urlparse(DATABASE_URL)
+        _parsed = {
+            "host": p.hostname,
+            "port": p.port or 5432,
+            "database": p.path.lstrip("/"),
+            "user": p.username,
+            "password": p.password,
+            "ssl_context": True,
+        }
+    return _parsed
+
+
+def _connect():
+    kwargs = _get_conn_kwargs()
+    return pg8000.native.Connection(**kwargs)
 
 
 def fetchone(sql, params=None):
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            return cur.fetchone()
+    conn = _connect()
+    try:
+        if params:
+            rows = conn.run(sql, *params)
+        else:
+            rows = conn.run(sql)
+        cols = [c["name"] for c in conn.columns]
+        if not rows:
+            return None
+        return dict(zip(cols, rows[0]))
+    finally:
+        conn.close()
 
 
 def fetchall(sql, params=None):
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
+    conn = _connect()
+    try:
+        if params:
+            rows = conn.run(sql, *params)
+        else:
+            rows = conn.run(sql)
+        cols = [c["name"] for c in conn.columns]
+        return [dict(zip(cols, row)) for row in rows]
+    finally:
+        conn.close()
 
 
 def execute(sql, params=None):
-    """Run a DML statement and return the first row (for RETURNING clauses)."""
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            try:
-                return cur.fetchone()
-            except psycopg2.ProgrammingError:
-                return None
+    conn = _connect()
+    try:
+        if params:
+            rows = conn.run(sql, *params)
+        else:
+            rows = conn.run(sql)
+        cols = [c["name"] for c in conn.columns] if conn.columns else []
+        if not rows or not cols:
+            return None
+        return dict(zip(cols, rows[0]))
+    finally:
+        conn.close()
