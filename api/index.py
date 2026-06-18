@@ -1,7 +1,6 @@
 import sys
 import os
 
-# Make sibling modules (prefixed _) importable when run by Vercel
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify
@@ -23,4 +22,4 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
